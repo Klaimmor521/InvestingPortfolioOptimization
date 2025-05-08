@@ -2,6 +2,12 @@ import yfinance as yf
 import pandas as pd
 from typing import List, Optional
 import numpy as np
+import logging
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+TRADING_PERIODS_PER_YEAR = 252  # Пример для дневных данных
 
 def load_historical_data(tickers: List[str],
                          start_date: str,
@@ -303,6 +309,151 @@ def calculate_statistics(returns_df: pd.DataFrame, trading_days_per_year: int = 
 #     assert cov_empty.empty
 #     print("Обработка пустого DataFrame доходностей: OK")
 
+def  calculate_portfolio_return(daily_returns_df: pd.DataFrame, weights: np.ndarray) -> float:
+    """
+    Рассчитывает годовую ожидаемую доходность портфеля.
 
+    Args:
+        daily_returns_df (pd.DataFrame): DataFrame с историческими дневными доходностями активов.
+                                         Колонки - активы, индексы - даты.
+        weights (np.ndarray): Массив весов активов в портфеле.
+
+    Returns:
+        float: Годовая ожидаемая доходность портфеля.
+    """
+    if not isinstance(daily_returns_df, pd.DataFrame):
+        logging.error("daily_returns_df должен быть pandas DataFrame.")
+        raise TypeError("daily_returns_df должен быть pandas DataFrame.")
+    if not isinstance(weights, np.ndarray):
+        logging.error("weights должен быть numpy ndarray.")
+        raise TypeError("weights должен быть numpy ndarray.")
+    if daily_returns_df.shape[1] != len(weights):
+        logging.error("Количество активов в daily_returns_df и weights должно совпадать.")
+        raise ValueError("Количество активов в daily_returns_df и weights должно совпадать.")
+    if not np.isclose(np.sum(weights), 1.0):
+        logging.warning(f"Сумма весов ({np.sum(weights):.4f}) не равна 1.0.")
+        # Можно добавить raise ValueError, если сумма весов *строго* должна быть 1.0
+
+    try:
+        # Средняя дневная доходность каждого актива
+        mean_daily_returns = daily_returns_df.mean()
+        # Ожидаемая дневная доходность портфеля
+        portfolio_mean_daily_return = np.dot(weights, mean_daily_returns)
+        # Годовая доходность
+        annualized_return = portfolio_mean_daily_return * TRADING_PERIODS_PER_YEAR
+        logging.info(f"Рассчитана годовая доходность: {annualized_return:.4f}")
+        return annualized_return
+    except Exception as e:
+        logging.error(f"Ошибка при расчете годовой доходности: {e}")
+        raise
+
+def calculate_annualized_volatility(daily_returns_df: pd.DataFrame, weights: np.ndarray) -> float:
+    """
+    Рассчитывает годовую волатильность (стандартное отклонение) портфеля.
+
+    Args:
+        daily_returns_df (pd.DataFrame): DataFrame с историческими дневными доходностями активов.
+        weights (np.ndarray): Массив весов активов в портфеле.
+
+    Returns:
+        float: Годовая волатильность портфеля.
+    """
+    if not isinstance(daily_returns_df, pd.DataFrame):
+        logging.error("daily_returns_df должен быть pandas DataFrame.")
+        raise TypeError("daily_returns_df должен быть pandas DataFrame.")
+    if not isinstance(weights, np.ndarray):
+        logging.error("weights должен быть numpy ndarray.")
+        raise TypeError("weights должен быть numpy ndarray.")
+    if daily_returns_df.shape[1] != len(weights):
+        logging.error("Количество активов в daily_returns_df и weights должно совпадать.")
+        raise ValueError("Количество активов в daily_returns_df и weights должно совпадать.")
+
+    try:
+        # Ковариационная матрица дневных доходностей
+        cov_matrix_daily = daily_returns_df.cov()
+        # Дисперсия портфеля
+        portfolio_variance_daily = np.dot(weights.T, np.dot(cov_matrix_daily, weights))
+        # Годовая волатильность (стандартное отклонение)
+        # Дисперсию умножаем на TRADING_PERIODS_PER_YEAR, а затем берем корень
+        annualized_volatility = np.sqrt(portfolio_variance_daily * TRADING_PERIODS_PER_YEAR)
+        logging.info(f"Рассчитана годовая волатильность: {annualized_volatility:.4f}")
+        return annualized_volatility
+    except Exception as e:
+        logging.error(f"Ошибка при расчете годовой волатильности: {e}")
+        raise
+
+def calculate_sharpe_ratio(annualized_return: float, annualized_volatility: float, risk_free_rate: float) -> float:
+    """
+    Рассчитывает коэффициент Шарпа.
+
+    Args:
+        annualized_return (float): Годовая ожидаемая доходность портфеля.
+        annualized_volatility (float): Годовая волатильность портфеля.
+        risk_free_rate (float): Безрисковая годовая ставка доходности.
+
+    Returns:
+        float: Коэффициент Шарпа.
+    """
+    if np.isclose(annualized_volatility, 0.0): 
+        logging.warning("Волатильность близка к нулю. Коэффициент Шарпа не может быть рассчитан (деление на ноль). Возвращаем NaN.")
+        return np.nan
+    try:
+        sharpe_ratio = (annualized_return - risk_free_rate) / annualized_volatility
+        logging.info(f"Для доходности {annualized_return:.4f} и волатильности {annualized_volatility:.4f} рассчитан коэффициент Шарпа: {sharpe_ratio:.4f}")
+        return sharpe_ratio
+    except Exception as e:
+        logging.error(f"Ошибка при расчете коэффициента Шарпа: {e}")
+        raise
+
+
+def get_portfolio_performance(daily_returns_df: pd.DataFrame, weights: np.ndarray, risk_free_rate: float) -> tuple[float, float, float]:
+    """
+    Рассчитывает годовую доходность, годовую волатильность и коэффициент Шарпа для портфеля.
+    """
+    logging.debug(f"Расчет производительности для весов: {weights}")
+    try:
+        # ИСПОЛЬЗУЕМ НОВОЕ ИМЯ ФУНКЦИИ
+        ann_return = calculate_portfolio_return(daily_returns_df, weights)
+        ann_volatility = calculate_annualized_volatility(daily_returns_df, weights) # Эта функция уже была для портфеля
+        sharpe = calculate_sharpe_ratio(ann_return, ann_volatility, risk_free_rate)
+        return ann_return, ann_volatility, sharpe
+    except Exception as e:
+        logging.error(f"Ошибка в get_portfolio_performance для весов {weights}: {e}")
+        return np.nan, np.nan, np.nan
+
+
+if __name__ == '__main__':
+    logging.info("Пример расчета для портфеля...")
+    # logging.basicConfig(level=logging.DEBUG) # Настройка уровня логов уже есть в начале файла
+
+    np.random.seed(42)
+    data_main = np.random.randn(TRADING_PERIODS_PER_YEAR * 2, 2) * 0.01 # Изменил имя переменной data
+    dates_main = pd.date_range(start='2022-01-01', periods=TRADING_PERIODS_PER_YEAR * 2, freq='B') # Изменил имя переменной dates
+    daily_returns_main = pd.DataFrame(data_main, columns=['Актив_A', 'Актив_B'], index=dates_main) # Изменил имя переменной daily_returns
+    daily_returns_main.iloc[0] = 0.0
+
+    portfolio_weights_main = np.array([0.6, 0.4]) # Изменил имя переменной
+    risk_free_main = 0.02 # Изменил имя переменной
+
+    try:
+        # ИСПОЛЬЗУЕМ ПЕРЕИМЕНОВАННУЮ ФУНКЦИЮ
+        # port_return, port_volatility, port_sharpe = get_portfolio_performance(daily_returns_main, portfolio_weights_main, risk_free_main)
+
+        # ИЛИ можно вызвать напрямую для проверки, если get_portfolio_performance еще не отлажена
+        ann_return_main = calculate_portfolio_return(daily_returns_main, portfolio_weights_main)
+        ann_volatility_main = calculate_annualized_volatility(daily_returns_main, portfolio_weights_main)
+        sharpe_main = calculate_sharpe_ratio(ann_return_main, ann_volatility_main, risk_free_main)
+
+
+        if not (np.isnan(ann_return_main) or np.isnan(ann_volatility_main)):
+            print(f"\n--- Результаты портфеля (Веса: {portfolio_weights_main}) ---")
+            print(f"Годовая ожидаемая доходность: {ann_return_main:.2%}")
+            print(f"Годовая волатильность: {ann_volatility_main:.2%}")
+            print(f"Коэффициент Шарпа: {sharpe_main:.2f}")
+
+        # ... (остальной код из __main__ для второго набора весов, если нужно) ...
+
+    except Exception as e:
+        print(f"Произошла ошибка в примере: {e}")
 
 
