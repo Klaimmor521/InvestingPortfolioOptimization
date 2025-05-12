@@ -3,6 +3,7 @@ import pandas as pd
 from typing import List, Optional
 import numpy as np
 import logging
+from scipy.optimize import minimize
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -405,7 +406,6 @@ def calculate_sharpe_ratio(annualized_return: float, annualized_volatility: floa
         logging.error(f"Ошибка при расчете коэффициента Шарпа: {e}")
         raise
 
-
 def get_portfolio_performance(daily_returns_df: pd.DataFrame, weights: np.ndarray, risk_free_rate: float) -> tuple[float, float, float]:
     """
     Рассчитывает годовую доходность, годовую волатильность и коэффициент Шарпа для портфеля.
@@ -421,39 +421,302 @@ def get_portfolio_performance(daily_returns_df: pd.DataFrame, weights: np.ndarra
         logging.error(f"Ошибка в get_portfolio_performance для весов {weights}: {e}")
         return np.nan, np.nan, np.nan
 
+# if __name__ == '__main__':
+#     logging.info("Пример расчета для портфеля...")
+#     # logging.basicConfig(level=logging.DEBUG) # Настройка уровня логов уже есть в начале файла
 
-if __name__ == '__main__':
-    logging.info("Пример расчета для портфеля...")
-    # logging.basicConfig(level=logging.DEBUG) # Настройка уровня логов уже есть в начале файла
+#     np.random.seed(42)
+#     data_main = np.random.randn(TRADING_PERIODS_PER_YEAR * 2, 2) * 0.01 # Изменил имя переменной data
+#     dates_main = pd.date_range(start='2022-01-01', periods=TRADING_PERIODS_PER_YEAR * 2, freq='B') # Изменил имя переменной dates
+#     daily_returns_main = pd.DataFrame(data_main, columns=['Актив_A', 'Актив_B'], index=dates_main) # Изменил имя переменной daily_returns
+#     daily_returns_main.iloc[0] = 0.0
 
-    np.random.seed(42)
-    data_main = np.random.randn(TRADING_PERIODS_PER_YEAR * 2, 2) * 0.01 # Изменил имя переменной data
-    dates_main = pd.date_range(start='2022-01-01', periods=TRADING_PERIODS_PER_YEAR * 2, freq='B') # Изменил имя переменной dates
-    daily_returns_main = pd.DataFrame(data_main, columns=['Актив_A', 'Актив_B'], index=dates_main) # Изменил имя переменной daily_returns
-    daily_returns_main.iloc[0] = 0.0
+#     portfolio_weights_main = np.array([0.6, 0.4]) # Изменил имя переменной
+#     risk_free_main = 0.02 # Изменил имя переменной
 
-    portfolio_weights_main = np.array([0.6, 0.4]) # Изменил имя переменной
-    risk_free_main = 0.02 # Изменил имя переменной
+#     try:
+#         # ИСПОЛЬЗУЕМ ПЕРЕИМЕНОВАННУЮ ФУНКЦИЮ
+#         # port_return, port_volatility, port_sharpe = get_portfolio_performance(daily_returns_main, portfolio_weights_main, risk_free_main)
 
+#         # ИЛИ можно вызвать напрямую для проверки, если get_portfolio_performance еще не отлажена
+#         ann_return_main = calculate_portfolio_return(daily_returns_main, portfolio_weights_main)
+#         ann_volatility_main = calculate_annualized_volatility(daily_returns_main, portfolio_weights_main)
+#         sharpe_main = calculate_sharpe_ratio(ann_return_main, ann_volatility_main, risk_free_main)
+
+
+#         if not (np.isnan(ann_return_main) or np.isnan(ann_volatility_main)):
+#             print(f"\n--- Результаты портфеля (Веса: {portfolio_weights_main}) ---")
+#             print(f"Годовая ожидаемая доходность: {ann_return_main:.2%}")
+#             print(f"Годовая волатильность: {ann_volatility_main:.2%}")
+#             print(f"Коэффициент Шарпа: {sharpe_main:.2f}")
+
+#         # ... (остальной код из __main__ для второго набора весов, если нужно) ...
+
+#     except Exception as e:
+#         print(f"Произошла ошибка в примере: {e}")
+
+def portfolio_return(weights, expected_returns):
+    """
+    Рассчитывает ожидаемую доходность портфеля.
+    Args:
+        weights (np.array): Вектор весов активов.
+        expected_returns (np.array): Вектор ожидаемых доходностей активов.
+    Returns:
+        float: Ожидаемая доходность портфеля.
+    """
+    return np.sum(expected_returns * weights)
+
+def portfolio_volatility(weights, cov_matrix):
+    """
+    Рассчитывает волатильность (стандартное отклонение) портфеля.
+    Args:
+        weights (np.array): Вектор весов активов.
+        cov_matrix (np.array): Ковариационная матрица доходностей активов.
+    Returns:
+        float: Волатильность портфеля.
+    """
+    return np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
+
+def minimize_volatility_for_target_return(expected_returns, cov_matrix, target_return):
+    num_assets = len(expected_returns)
+    # args убираем отсюда, так как cov_matrix будет передана явно в objective
+    
+    # Целевая функция для минимизации (волатильность)
+    def objective(weights, cov_matrix_arg): # Добавляем cov_matrix_arg
+        return portfolio_volatility(weights, cov_matrix_arg) # Используем cov_matrix_arg
+
+    # Ограничения
+    constraints = (
+        {'type': 'eq', 'fun': lambda weights: np.sum(weights) - 1},
+        {'type': 'eq', 'fun': lambda weights, er=expected_returns: portfolio_return(weights, er) - target_return}
+    )
+    
+    bounds = tuple((0, 1) for _ in range(num_assets))
+    initial_weights = num_assets * [1. / num_assets,]
+
+    result = minimize(objective, initial_weights, args=(cov_matrix,), # Передаем cov_matrix как второй аргумент для objective
+                      method='SLSQP', bounds=bounds, constraints=constraints)
+
+    if result.success:
+        return result.x
+    else:
+        return None
+
+def calculate_efficient_frontier(expected_returns, cov_matrix, num_points=100):
+    """
+    Рассчитывает точки для построения Границы Эффективности.
+    """
+    results_volatility = []
+    results_returns = []
+    results_weights = []
+
+    # Определяем диапазон целевых доходностей (можно настроить)
+    min_ret = np.min(expected_returns)
+    max_ret = np.max(expected_returns)
+    target_returns_range = np.linspace(min_ret, max_ret, num_points)
+
+    for target_ret in target_returns_range:
+        optimal_weights = minimize_volatility_for_target_return(expected_returns, cov_matrix, target_ret)
+        if optimal_weights is not None:
+            results_weights.append(optimal_weights)
+            results_returns.append(portfolio_return(optimal_weights, expected_returns))
+            results_volatility.append(portfolio_volatility(optimal_weights, cov_matrix))
+
+    return np.array(results_returns), np.array(results_volatility), np.array(results_weights)
+
+
+def minimum_variance_portfolio(expected_returns, cov_matrix):
+    num_assets = len(expected_returns)
+    # args убираем
+    
+    def objective(weights, cov_matrix_arg): # Добавляем cov_matrix_arg
+        return portfolio_volatility(weights, cov_matrix_arg) # Используем cov_matrix_arg
+
+    constraints = ({'type': 'eq', 'fun': lambda weights: np.sum(weights) - 1})
+    bounds = tuple((0, 1) for _ in range(num_assets))
+    initial_weights = num_assets * [1. / num_assets,]
+
+    result = minimize(objective, initial_weights, args=(cov_matrix,), # Передаем cov_matrix
+                      method='SLSQP', bounds=bounds, constraints=constraints)
+
+    if result.success:
+        mvp_return = portfolio_return(result.x, expected_returns) # expected_returns здесь доступна из замыкания
+        mvp_volatility = portfolio_volatility(result.x, cov_matrix) # cov_matrix здесь доступна из замыкания
+        return result.x, mvp_return, mvp_volatility
+    else:
+        return None, None, None
+
+def sharpe_ratio(weights, expected_returns, cov_matrix, risk_free_rate):
+    """
+    Рассчитывает коэффициент Шарпа.
+    """
+    p_return = portfolio_return(weights, expected_returns)
+    p_volatility = portfolio_volatility(weights, cov_matrix)
+    if p_volatility == 0: # Избегаем деления на ноль
+        return -np.inf if (p_return - risk_free_rate) < 0 else np.inf
+    return (p_return - risk_free_rate) / p_volatility
+
+def max_sharpe_ratio_portfolio(expected_returns, cov_matrix, risk_free_rate):
+    num_assets = len(expected_returns)
+
+    # Целевая функция: минимизируем -SharpeRatio
+    def objective(weights, er_arg, cov_arg, rfr_arg): # Принимаем все нужные аргументы
+        return -sharpe_ratio(weights, er_arg, cov_arg, rfr_arg)
+
+    constraints = ({'type': 'eq', 'fun': lambda weights: np.sum(weights) - 1})
+    bounds = tuple((0, 1) for asset in range(num_assets))
+    initial_weights = num_assets * [1. / num_assets,]
+
+    # Передаем все необходимые аргументы для objective через args
+    result = minimize(objective, initial_weights, args=(expected_returns, cov_matrix, risk_free_rate),
+                      method='SLSQP', bounds=bounds, constraints=constraints)
+
+    if result.success:
+        msr_weights = result.x
+        msr_return = portfolio_return(msr_weights, expected_returns)
+        msr_volatility = portfolio_volatility(msr_weights, cov_matrix)
+        msr_sharpe = sharpe_ratio(msr_weights, expected_returns, cov_matrix, risk_free_rate)
+        return msr_weights, msr_return, msr_volatility, msr_sharpe
+    else:
+        return None, None, None, None
+
+# if __name__ == '__main__':
+#     # Примерные данные (замени на свои реальные данные)
+#     # Предположим, у нас 3 актива
+#     # Ожидаемые годовые доходности
+#     sample_returns = np.array([0.10, 0.15, 0.08])
+#     # Примерная годовая ковариационная матрица
+#     sample_cov_matrix = np.array([
+#         [0.0100, 0.0018, 0.0011],  # Актив1: var=0.01, cov(1,2)=0.0018, cov(1,3)=0.0011
+#         [0.0018, 0.0225, 0.0063],  # Актив2: cov(2,1)=0.0018, var=0.0225, cov(2,3)=0.0063
+#         [0.0011, 0.0063, 0.0081]   # Актив3: cov(3,1)=0.0011, cov(3,2)=0.0063, var=0.0081
+#     ])
+#     risk_free_rate_sample = 0.02 # Примерная безрисковая ставка
+
+#     print("--- Тестирование функций ---")
+
+#     # Тест точки на границе эффективности
+#     target_test_return = 0.12
+#     print(f"\nОптимальные веса для целевой доходности {target_test_return*100:.2f}%:")
+#     weights_for_target = minimize_volatility_for_target_return(sample_returns, sample_cov_matrix, target_test_return)
+#     if weights_for_target is not None:
+#         print(f"Веса: {[f'{w*100:.2f}%' for w in weights_for_target]}")
+#         print(f"Доходность портфеля: {portfolio_return(weights_for_target, sample_returns)*100:.2f}%")
+#         print(f"Волатильность портфеля: {portfolio_volatility(weights_for_target, sample_cov_matrix)*100:.2f}%")
+
+#     # Тест MVP
+#     print("\nПортфель Минимальной Дисперсии (MVP):")
+#     mvp_w, mvp_r, mvp_v = minimum_variance_portfolio(sample_returns, sample_cov_matrix)
+#     if mvp_w is not None:
+#         print(f"Веса MVP: {[f'{w*100:.2f}%' for w in mvp_w]}")
+#         print(f"Доходность MVP: {mvp_r*100:.2f}%")
+#         print(f"Волатильность MVP: {mvp_v*100:.2f}%")
+
+#     # Тест Max Sharpe Ratio
+#     print("\nПортфель с Максимальным Коэффициентом Шарпа:")
+#     msr_w, msr_r, msr_v, msr_s = max_sharpe_ratio_portfolio(sample_returns, sample_cov_matrix, risk_free_rate_sample)
+#     if msr_w is not None:
+#         print(f"Веса MSR: {[f'{w*100:.2f}%' for w in msr_w]}")
+#         print(f"Доходность MSR: {msr_r*100:.2f}%")
+#         print(f"Волатильность MSR: {msr_v*100:.2f}%")
+#         print(f"Коэффициент Шарпа MSR: {msr_s:.4f}")
+
+#     # Тест Границы Эффективности
+#     print("\nГенерация точек для Границы Эффективности (первые 5):")
+#     ef_returns, ef_volatilities, ef_weights = calculate_efficient_frontier(sample_returns, sample_cov_matrix, num_points=20)
+#     if len(ef_returns) > 0:
+#         for i in range(min(5, len(ef_returns))):
+#             print(f"Точка {i+1}: Доходность={ef_returns[i]*100:.2f}%, Волатильность={ef_volatilities[i]*100:.2f}%, "
+#                   f"Веса={[f'{w*100:.1f}%' for w in ef_weights[i]]}")
+#     else:
+#         print("Не удалось сгенерировать точки для границы эффективности.")
+
+def calculate_portfolio_optimization_results(prices_df: pd.DataFrame,
+                                             risk_free_rate: float = 0.02, # Ставка по умолчанию 2%
+                                             num_frontier_points: int = 50): # Кол-во точек для границы
+    """
+    Координирует весь процесс расчета: от цен до результатов оптимизации.
+
+    Args:
+        prices_df (pd.DataFrame): DataFrame с историческими ценами закрытия.
+        risk_free_rate (float): Годовая безрисковая ставка.
+        num_frontier_points (int): Количество точек для расчета границы эффективности.
+
+    Returns:
+        dict: Словарь с результатами или None в случае ошибки.
+              Структура словаря:
+              {
+                  'mvp': {'weights': np.array, 'return': float, 'volatility': float},
+                  'msr': {'weights': np.array, 'return': float, 'volatility': float, 'sharpe': float},
+                  'frontier': {'returns': np.array, 'volatilities': np.array, 'weights': np.array},
+                  'stats': {'mean_returns': pd.Series, 'cov_matrix': pd.DataFrame} # Добавим статистику
+              }
+    """
+    logging.info("Начало процесса оптимизации портфеля...")
     try:
-        # ИСПОЛЬЗУЕМ ПЕРЕИМЕНОВАННУЮ ФУНКЦИЮ
-        # port_return, port_volatility, port_sharpe = get_portfolio_performance(daily_returns_main, portfolio_weights_main, risk_free_main)
+        # 1. Расчет доходностей
+        logging.info("Расчет периодических доходностей...")
+        returns_df = calculate_periodic_returns(prices_df)
+        if returns_df.empty:
+            logging.error("Не удалось рассчитать доходности (DataFrame пуст).")
+            return None
+        logging.info(f"Доходности рассчитаны. Форма: {returns_df.shape}")
 
-        # ИЛИ можно вызвать напрямую для проверки, если get_portfolio_performance еще не отлажена
-        ann_return_main = calculate_portfolio_return(daily_returns_main, portfolio_weights_main)
-        ann_volatility_main = calculate_annualized_volatility(daily_returns_main, portfolio_weights_main)
-        sharpe_main = calculate_sharpe_ratio(ann_return_main, ann_volatility_main, risk_free_main)
+        # 2. Расчет статистики (аннуализированной)
+        logging.info("Расчет аннуализированной статистики (средние доходности, ковариация)...")
+        # Используем существующую функцию calculate_statistics
+        expected_returns, cov_matrix = calculate_statistics(returns_df, trading_days_per_year=TRADING_PERIODS_PER_YEAR)
+        if expected_returns.empty or cov_matrix.empty:
+             logging.error("Не удалось рассчитать статистику.")
+             return None
+        logging.info("Статистика рассчитана.")
+        # print("Средние годовые доходности:\n", expected_returns) # Для отладки
+        # print("Годовая ковариационная матрица:\n", cov_matrix) # Для отладки
 
 
-        if not (np.isnan(ann_return_main) or np.isnan(ann_volatility_main)):
-            print(f"\n--- Результаты портфеля (Веса: {portfolio_weights_main}) ---")
-            print(f"Годовая ожидаемая доходность: {ann_return_main:.2%}")
-            print(f"Годовая волатильность: {ann_volatility_main:.2%}")
-            print(f"Коэффициент Шарпа: {sharpe_main:.2f}")
+        # 3. Расчет портфеля минимальной дисперсии (MVP) - Часть MID-11
+        logging.info("Расчет портфеля минимальной дисперсии (MVP)...")
+        mvp_weights, mvp_return, mvp_volatility = minimum_variance_portfolio(expected_returns, cov_matrix)
+        if mvp_weights is None:
+            logging.warning("Не удалось рассчитать портфель минимальной дисперсии.")
+            mvp_results = None
+        else:
+            mvp_results = {'weights': mvp_weights, 'return': mvp_return, 'volatility': mvp_volatility}
+            logging.info("MVP рассчитан.")
 
-        # ... (остальной код из __main__ для второго набора весов, если нужно) ...
+        # 4. Расчет портфеля с максимальным коэфф. Шарпа (MSR) - Часть MID-11
+        logging.info("Расчет портфеля с максимальным коэффициентом Шарпа (MSR)...")
+        msr_weights, msr_return, msr_volatility, msr_sharpe = max_sharpe_ratio_portfolio(expected_returns, cov_matrix, risk_free_rate)
+        if msr_weights is None:
+            logging.warning("Не удалось рассчитать портфель с максимальным коэфф. Шарпа.")
+            msr_results = None
+        else:
+            msr_results = {'weights': msr_weights, 'return': msr_return, 'volatility': msr_volatility, 'sharpe': msr_sharpe}
+            logging.info("MSR рассчитан.")
+
+        # 5. Расчет точек границы эффективности - Часть MID-12
+        logging.info(f"Расчет границы эффективности ({num_frontier_points} точек)...")
+        ef_returns, ef_volatilities, ef_weights = calculate_efficient_frontier(expected_returns, cov_matrix, num_points=num_frontier_points)
+        if len(ef_returns) == 0:
+             logging.warning("Не удалось рассчитать точки для границы эффективности.")
+             frontier_results = None
+        else:
+             frontier_results = {'returns': ef_returns, 'volatilities': ef_volatilities, 'weights': ef_weights}
+             logging.info("Граница эффективности рассчитана.")
+
+        # 6. Сбор результатов
+        final_results = {
+            'mvp': mvp_results,
+            'msr': msr_results,
+            'frontier': frontier_results,
+            'stats': {'mean_returns': expected_returns, 'cov_matrix': cov_matrix} # Возвращаем статистику, может пригодиться
+        }
+        logging.info("Процесс оптимизации портфеля завершен.")
+        return final_results
 
     except Exception as e:
-        print(f"Произошла ошибка в примере: {e}")
-
+        logging.error(f"Критическая ошибка в процессе оптимизации портфеля: {e}", exc_info=True) # Добавим exc_info=True
+        # import traceback # Можно и так, если нет logging
+        # traceback.print_exc()
+        return None
 
