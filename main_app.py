@@ -37,18 +37,16 @@ widgets = ui_setup.setup_main_window(app)
 # --- Функция-обработчик нажатия кнопки ---
 def calculate_button_callback():
     print("Нажата кнопка 'Рассчитать'")
+
+    # --- Шаг 0: Первичная очистка и установка начального статуса ---
     widgets['status_label'].configure(text="Обработка запроса...", text_color="gray")
+    widgets['result_display_textbox'].configure(state="normal")
+    widgets['result_display_textbox'].delete("1.0", "end")
+    widgets['result_display_textbox'].configure(state="disabled")
+    clear_plot() # Очищаем график
+    app.update_idletasks() # Обновляем интерфейс
 
-    # Очистка текстового поля
-    widgets['result_display_textbox'].configure(state="normal") # Разрешить редактирование
-    widgets['result_display_textbox'].delete("1.0", "end")      # Удалить весь текст
-    widgets['result_display_textbox'].configure(state="disabled")# Запретить редактирование
-
-    # Очистка графика
-    clear_plot()
-    app.update_idletasks() # Обновляем интерфейс, чтобы изменения были видны сразу
-
-    # 1. Получаем тикеры
+    # --- Шаг 1: Получение и валидация тикеров ---
     tickers_string = widgets['ticker_entry'].get()
     if not tickers_string:
         widgets['status_label'].configure(text="Ошибка: Введите тикеры акций.", text_color="red")
@@ -61,12 +59,10 @@ def calculate_button_callback():
         widgets['status_label'].configure(text="Ошибка: Введите не более 10 тикеров.", text_color="red")
         return
 
-    # 2. Получаем и проверяем даты
+    # --- Шаг 2: Получение и валидация дат ---
     start_date_str_input = widgets['start_date_entry'].get()
     end_date_str_input = widgets['end_date_entry'].get()
-
     try:
-        # Сразу преобразуем в объекты date для всех проверок
         start_date_obj = datetime.strptime(start_date_str_input, '%Y-%m-%d').date()
         end_date_obj = datetime.strptime(end_date_str_input, '%Y-%m-%d').date()
     except ValueError:
@@ -74,77 +70,53 @@ def calculate_button_callback():
         return
 
     today = date.today()
-    yesterday = today - timedelta(days=1) # Данные за "сегодня" могут быть неполными
+    yesterday = today - timedelta(days=1)
+    final_end_date_obj = end_date_obj
+    corrected_date_message_part = ""
 
-    # --- Строгие проверки дат ---
-    # 1. Начальная дата не в будущем
-    if start_date_obj > today: # Сравниваем с 'today', так как yfinance может найти данные за сегодня, если рынок уже закрылся
+    if start_date_obj > today:
         widgets['status_label'].configure(text="Ошибка: Начальная дата не может быть в будущем.", text_color="red")
         return
-
-    # 2. Коррекция конечной даты, если она в будущем или "сегодня"
-    final_end_date_obj = end_date_obj # Изначально используем введенную конечную дату
-    corrected_message = ""
-
-
-    if end_date_obj >= today: # Если конечная дата "сегодня" или в будущем
-        final_end_date_obj = yesterday # Корректируем на вчерашний день
-        corrected_message = f"Внимание: Конечная дата скорректирована на {final_end_date_obj.strftime('%Y-%m-%d')}."
+    if end_date_obj >= today:
+        final_end_date_obj = yesterday
+        corrected_date_message_part = f"Конечная дата скорректирована на {final_end_date_obj.strftime('%Y-%m-%d')}. "
         widgets['end_date_entry'].delete(0, "end")
         widgets['end_date_entry'].insert(0, final_end_date_obj.strftime('%Y-%m-%d'))
-
-    # 3. Начальная дата должна быть строго раньше конечной (даже после коррекции)
     if start_date_obj >= final_end_date_obj:
-         widgets['status_label'].configure(text="Ошибка: Начальная дата должна быть раньше конечной (учитывая коррекцию).", text_color="red")
-         return
-
-    # 4. Минимальная длительность периода (например, 30 торговых дней ~ 42 календарных)
-    # Для более надежных расчетов лучше брать больше, например, 60-90 торговых дней.
-    min_calendar_days_for_period = 42 # Примерно 2 месяца
+        widgets['status_label'].configure(text="Ошибка: Начальная дата должна быть раньше конечной (учитывая коррекцию).", text_color="red")
+        return
+    min_calendar_days_for_period = 42
     if (final_end_date_obj - start_date_obj).days < min_calendar_days_for_period:
         widgets['status_label'].configure(text=f"Ошибка: Период должен быть не менее {min_calendar_days_for_period} календарных дней.", text_color="red")
         return
-
     MAX_PERIOD_YEARS = 8
-    MAX_PERIOD_DAYS = MAX_PERIOD_YEARS * 365.25 # Используем 365.25 для учета високосных годов
-
+    MAX_PERIOD_DAYS = MAX_PERIOD_YEARS * 365.25
     if (final_end_date_obj - start_date_obj).days > MAX_PERIOD_DAYS:
-        widgets['status_label'].configure(text=f"Ошибка: Период слишком большой (макс. {MAX_PERIOD_YEARS} лет). Выберите меньший диапазон.", text_color="red")
+        widgets['status_label'].configure(text=f"Ошибка: Период слишком большой (макс. {MAX_PERIOD_YEARS} лет).", text_color="red")
         return
 
-    # Если была коррекция даты и все проверки пройдены, выводим сообщение
-    if corrected_message:
-        widgets['status_label'].configure(text=corrected_message, text_color="orange")
-        app.update_idletasks()
-    else:
-        # Если не было коррекции и все проверки пройдены, можно очистить статус или поставить "Проверка дат пройдена"
-        widgets['status_label'].configure(text="Проверка данных...", text_color="gray") # Обновляем статус
-        app.update_idletasks()
-
-    # Преобразуем итоговые даты обратно в строки для yfinance
     start_date_for_yfinance = start_date_obj.strftime('%Y-%m-%d')
     end_date_for_yfinance = final_end_date_obj.strftime('%Y-%m-%d')
-    # --- Конец проверок дат ---
 
+    # --- Шаг 2.1: Получение и валидация безрисковой ставки ---
     risk_free_rate_str = widgets['risk_free_rate_entry'].get()
     try:
         risk_free_rate_percent = float(risk_free_rate_str)
-        
         if risk_free_rate_percent < 0:
             widgets['status_label'].configure(text="Ошибка: Безрисковая ставка не может быть отрицательной.", text_color="red")
             return
-        MAX_rozsądna_STAWKA_PROC = 50.0 
-        if risk_free_rate_percent > MAX_rozsądna_STAWKA_PROC:
-            widgets['status_label'].configure(text=f"Ошибка: Безрисковая ставка слишком высока (макс. {MAX_rozsądna_STAWKA_PROC}%).", text_color="red")
+        MAX_PROC = 50.0
+        if risk_free_rate_percent > MAX_PROC:
+            widgets['status_label'].configure(text=f"Ошибка: Безрисковая ставка слишком высока (макс. {MAX_PROC}%).", text_color="red")
             return
-            
-        risk_free_rate = risk_free_rate_percent / 100.0 # Переводим из процентов в доли
+        risk_free_rate = risk_free_rate_percent / 100.0
     except ValueError:
         widgets['status_label'].configure(text="Ошибка: Неверный формат безрисковой ставки. Введите число (%).", text_color="red")
         return
 
-    # 3. Вызываем функцию загрузки данных
-    widgets['status_label'].configure(text=f"Загрузка данных для: {tickers_list} ({start_date_for_yfinance} по {end_date_for_yfinance})...", text_color="gray")
+    # --- Шаг 3: Загрузка данных ---
+    status_before_load = corrected_date_message_part + f"Загрузка данных для: {tickers_list} ({start_date_for_yfinance} по {end_date_for_yfinance})..."
+    widgets['status_label'].configure(text=status_before_load, text_color="gray")
     app.update_idletasks()
 
     historical_data_df = portfolio_calculator.load_historical_data(
@@ -153,27 +125,85 @@ def calculate_button_callback():
         end_date=end_date_for_yfinance
     )
 
-    # 4. Обрабатываем результат загрузки
-    min_data_points_required = 20 # Например, минимум 20 торговых дней данных для расчетов
-    if historical_data_df is None or not isinstance(historical_data_df, pd.DataFrame) or historical_data_df.empty:
-        widgets['status_label'].configure(text="Ошибка при загрузке данных. Проверьте тикеры и интернет-соединение.", text_color="red")
-        return
-    if historical_data_df.shape[0] < min_data_points_required:
-        widgets['status_label'].configure(text=f"Ошибка: Загружено слишком мало данных ({historical_data_df.shape[0]} дн.). Требуется минимум {min_data_points_required} дн.", text_color="red")
-        return
+    # --- Шаг 4: Обработка результатов загрузки и формирование статуса ---
+    current_status_text = corrected_date_message_part # Начинаем с сообщения о коррекции даты, если оно было
+    current_status_color = "gray" # По умолчанию
+    can_proceed_to_optimization = True
 
-    widgets['status_label'].configure(text=f"Данные загружены ({historical_data_df.shape[0]} строк). Выполняется оптимизация...", text_color="gray")
+    min_data_points_required = 20 # Минимальное количество дней с данными
+
+    if historical_data_df is None or not isinstance(historical_data_df, pd.DataFrame) or historical_data_df.empty:
+        current_status_text = "Ошибка: Не удалось загрузить данные ни для одного из тикеров. Проверьте тикеры и интернет-соединение."
+        current_status_color = "red"
+        can_proceed_to_optimization = False
+    elif historical_data_df.shape[0] < min_data_points_required:
+        current_status_text = f"Ошибка: Загружено слишком мало данных ({historical_data_df.shape[0]} дн.). Требуется минимум {min_data_points_required} дн."
+        current_status_color = "red"
+        can_proceed_to_optimization = False
+    else:
+        loaded_tickers = historical_data_df.columns.tolist()
+        all_input_tickers_set = set(tickers_list)
+        loaded_tickers_set = set(loaded_tickers)
+        failed_to_load_tickers = list(all_input_tickers_set - loaded_tickers_set)
+
+        if failed_to_load_tickers:
+            current_status_text += f"Предупреждение: Не удалось загрузить: {failed_to_load_tickers}. "
+            current_status_color = "orange"
+        
+        if not loaded_tickers: # Этот случай уже отловлен выше, но для полной уверенности
+            current_status_text += "Ошибка: Нет данных для расчета после фильтрации."
+            current_status_color = "red"
+            can_proceed_to_optimization = False
+        elif len(loaded_tickers) == 1:
+            current_status_text += f"Расчет для одного актива: {loaded_tickers[0]}. Для диверсификации необходимо >1 актива. "
+            current_status_color = "orange" # Даже если не было failed_to_load, это предупреждение
+        elif len(loaded_tickers) > 1:
+            if failed_to_load_tickers:
+                current_status_text += f"Расчет для успешно загруженных: {loaded_tickers}. "
+            else: # Все запрошенные и загруженные тикеры совпали
+                current_status_text = corrected_date_message_part + f"Данные для {loaded_tickers} успешно загружены ({historical_data_df.shape[0]} строк). "
+                current_status_color = "gray" # Или "green"
+
+    # Устанавливаем финальный статус ПЕРЕД оптимизацией (или ошибку, если ее нельзя проводить)
+    widgets['status_label'].configure(text=current_status_text.strip(), text_color=current_status_color)
     app.update_idletasks()
 
-    # 5. Вызов функции-координатора оптимизации
+    if not can_proceed_to_optimization:
+        return # Выход, если оптимизацию проводить нельзя
+
+    # --- Шаг 4.1: Добавляем "Выполняется оптимизация" к текущему статусу ---
+    # (только если нет критической ошибки красного цвета)
+    if widgets['status_label'].cget("text_color") != "red":
+        existing_status_text = widgets['status_label'].cget("text")
+        widgets['status_label'].configure(
+            text=existing_status_text + "Выполняется оптимизация...",
+            text_color=widgets['status_label'].cget("text_color")
+        )
+        app.update_idletasks()
+
+    # --- Шаг 5: Вызов функции-координатора оптимизации ---
     optimization_results = portfolio_calculator.calculate_portfolio_optimization_results(
         prices_df=historical_data_df,
-        risk_free_rate=risk_free_rate # Используем значение из поля ввода
+        risk_free_rate=risk_free_rate
     )
 
-    # 6. Обработка результатов оптимизации
+    # --- Шаг 6: Обработка результатов оптимизации ---
     if optimization_results:
-        widgets['status_label'].configure(text="Оптимизация завершена!", text_color="green")
+        final_status_message_parts = []
+        final_status_color_after_opt = "green"
+
+        # Если были предупреждения на этапе загрузки, добавим их к финальному сообщению
+        if corrected_date_message_part:
+             final_status_message_parts.append(corrected_date_message_part.strip())
+        if failed_to_load_tickers:
+            final_status_message_parts.append(f"Обработаны не все тикеры (не загружены: {failed_to_load_tickers}).")
+            final_status_color_after_opt = "orange"
+        if len(loaded_tickers) == 1:
+            final_status_message_parts.append(f"Расчет для одного актива ({loaded_tickers[0]}).")
+            final_status_color_after_opt = "orange"
+        
+        final_status_message_parts.append("Оптимизация завершена!")
+        widgets['status_label'].configure(text=" ".join(final_status_message_parts), text_color=final_status_color_after_opt)
 
         display_text_results(optimization_results.get('mvp'),
                              optimization_results.get('msr'),
@@ -182,19 +212,20 @@ def calculate_button_callback():
                      optimization_results.get('mvp'),
                      optimization_results.get('msr'),
                      optimization_results.get('stats'))
-
-        # Для отладки можно вывести в консоль
-        print("\n--- Результаты Оптимизации (из callback) ---")
-        if optimization_results.get('mvp'):
-            print("MVP:", optimization_results['mvp'])
-        if optimization_results.get('msr'):
-            print("MSR:", optimization_results['msr'])
+        
+        print("\n--- Результаты Оптимизации (из callback) ---") # Для консольной отладки
+        if optimization_results.get('mvp'): print("MVP:", optimization_results['mvp'])
+        if optimization_results.get('msr'): print("MSR:", optimization_results['msr'])
         if optimization_results.get('frontier') and 'returns' in optimization_results['frontier']:
             print("Frontier points:", len(optimization_results['frontier']['returns']))
-
     else:
-        widgets['status_label'].configure(text="Ошибка в процессе оптимизации портфеля. Смотрите консоль.", text_color="red")
-    
+        # Если оптимизация не удалась, но загрузка данных прошла (статус не красный)
+        if widgets['status_label'].cget("text_color") != "red":
+             # Берем текст ДО "Выполняется оптимизация..." и добавляем ошибку
+             text_before_opt_attempt = widgets['status_label'].cget("text").split("Выполняется оптимизация...")[0]
+             widgets['status_label'].configure(text=text_before_opt_attempt + " Ошибка в процессе оптимизации. Смотрите консоль.", text_color="red")
+        # Если уже была красная ошибка загрузки, она останется
+
     gc.collect()
     print("Сборщик мусора вызван.")
 
