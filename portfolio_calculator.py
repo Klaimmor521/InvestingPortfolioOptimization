@@ -140,64 +140,6 @@ def calculate_periodic_returns(prices_df: pd.DataFrame) -> pd.DataFrame:
 
     return returns_df
 
-# # Пример использования (для тестирования этой функции):
-# if __name__ == '__main__':
-#     # Создадим тестовый DataFrame с ценами
-#     data = {
-#         'AAPL': [150, 152, 151, 155, 154],
-#         'MSFT': [300, 303, 302, 305, 306]
-#     }
-#     dates = pd.to_datetime(['2023-01-01', '2023-01-02', '2023-01-03', '2023-01-04', '2023-01-05'])
-#     prices_test_df = pd.DataFrame(data, index=dates)
-
-#     print("Исходный DataFrame цен:")
-#     print(prices_test_df)
-#     print("-" * 30)
-
-#     # Проверим случай с пустым DataFrame
-#     empty_df = pd.DataFrame()
-#     print("\nТест с пустым DataFrame:")
-#     returns_from_empty = calculate_periodic_returns(empty_df)
-#     print(returns_from_empty)
-#     print("-" * 30)
-
-#     # Проверим основной функционал
-#     try:
-#         returns_test_df = calculate_periodic_returns(prices_test_df.copy()) # .copy() чтобы не менять исходный
-#         print("\nРассчитанный DataFrame доходностей:")
-#         print(returns_test_df)
-#         print("-" * 30)
-
-#         # Проверим, что первая дата исходного DataFrame отсутствует в доходностях
-#         if not returns_test_df.empty:
-#             assert prices_test_df.index[0] not in returns_test_df.index
-#             print(f"Первая дата ({prices_test_df.index[0].date()}) из цен отсутствует в доходностях: OK")
-
-#         # Проверим расчет для одного значения вручную
-#         # AAPL: (152 - 150) / 150 = 0.013333...
-#         expected_aapl_return_day2 = (152 - 150) / 150
-#         if not returns_test_df.empty: # Добавим проверку, что DataFrame не пустой
-#             actual_aapl_return_day2 = returns_test_df.loc[dates[1], 'AAPL'] # Доходность для второй даты
-#             assert np.isclose(actual_aapl_return_day2, expected_aapl_return_day2), \
-#                 f"Ошибка в расчете! Ожидалось: {expected_aapl_return_day2}, Получено: {actual_aapl_return_day2}"
-#             print(f"Ручная проверка значения для AAPL на {dates[1].date()}: OK")
-
-#     except Exception as e:
-#         print(f"Произошла ошибка: {e}")
-
-#     # Тест с NaN внутри данных
-#     data_with_nan = {
-#         'GOOG': [2000, np.nan, 2010, 2005, 2020],
-#         'AMZN': [3000, 3010, 3005, np.nan, 3030]
-#     }
-#     prices_nan_df = pd.DataFrame(data_with_nan, index=dates)
-#     print("\nТест с DataFrame с NaN внутри:")
-#     print(prices_nan_df)
-#     returns_nan_df = calculate_periodic_returns(prices_nan_df.copy())
-#     print("\nРассчитанный DataFrame доходностей с NaN:")
-#     print(returns_nan_df)
-#     # .pct_change() сам обрабатывает NaN: результат до и после NaN будет NaN для этого периода.
-
 def calculate_statistics(returns_df: pd.DataFrame, trading_days_per_year: int = 252):
     """
     Рассчитывает основные статистические показатели для моделирования портфеля:
@@ -243,72 +185,6 @@ def calculate_statistics(returns_df: pd.DataFrame, trading_days_per_year: int = 
     cov_annual_matrix = cov_periodic_matrix * trading_days_per_year
 
     return mean_annual_returns, cov_annual_matrix
-
-# # Пример использования (для тестирования этой функции):
-# if __name__ == '__main__':
-#     # --- Код для тестирования calculate_periodic_returns остался выше ---
-#     # ... (скопируй сюда тестовый блок из предыдущего ответа, если нужно)
-#     # Создадим тестовый DataFrame с ценами для нового теста
-#     data_prices = {
-#         'STOCK_A': [100, 101, 102, 101, 103, 105, 104],
-#         'STOCK_B': [200, 200, 201, 203, 202, 205, 206]
-#     }
-#     dates_prices = pd.to_datetime([
-#         '2023-01-01', '2023-01-02', '2023-01-03', '2023-01-04',
-#         '2023-01-05', '2023-01-06', '2023-01-07'
-#     ])
-#     prices_df_for_stats = pd.DataFrame(data_prices, index=dates_prices)
-
-#     print("\n" + "="*50)
-#     print("Тестирование функции calculate_statistics:")
-#     print("="*50)
-#     print("Исходный DataFrame цен для статистики:")
-#     print(prices_df_for_stats)
-
-#     # Сначала получим доходности
-#     returns_df_for_stats = calculate_periodic_returns(prices_df_for_stats.copy())
-#     print("\nРассчитанный DataFrame периодических доходностей:")
-#     print(returns_df_for_stats)
-
-#     if returns_df_for_stats.empty:
-#         print("\nDataFrame доходностей пуст, статистика не может быть рассчитана.")
-#     else:
-#         # Рассчитаем статистику
-#         try:
-#             mean_returns, cov_matrix = calculate_statistics(returns_df_for_stats)
-
-#             print("\nАннуализированные средние доходности (pd.Series):")
-#             print(mean_returns)
-#             print(f"Тип: {type(mean_returns)}")
-
-#             print("\nАннуализированная ковариационная матрица (pd.DataFrame):")
-#             print(cov_matrix)
-#             print(f"Тип: {type(cov_matrix)}")
-
-#             # Проверим размерности
-#             assert len(mean_returns) == len(returns_df_for_stats.columns)
-#             assert cov_matrix.shape == (len(returns_df_for_stats.columns), len(returns_df_for_stats.columns))
-#             print("\nПроверка размерностей: OK")
-
-#             # Дисперсия отдельного актива - это диагональный элемент ковариационной матрицы
-#             variance_stock_a_annual = cov_matrix.loc['STOCK_A', 'STOCK_A']
-#             # Стандартное отклонение - корень из дисперсии
-#             std_dev_stock_a_annual = np.sqrt(variance_stock_a_annual)
-#             print(f"\nПример: Аннуализированная Дисперсия STOCK_A: {variance_stock_a_annual:.6f}")
-#             print(f"Пример: Аннуализированное Станд.Откл. (Волатильность) STOCK_A: {std_dev_stock_a_annual:.6f}")
-
-#         except Exception as e:
-#             print(f"Произошла ошибка при расчете статистики: {e}")
-
-#     # Тест с пустым DataFrame доходностей
-#     print("\nТест calculate_statistics с пустым DataFrame доходностей:")
-#     empty_returns_df = pd.DataFrame()
-#     mean_empty, cov_empty = calculate_statistics(empty_returns_df)
-#     print("Средние доходности:", mean_empty)
-#     print("Ковариационная матрица:", cov_empty)
-#     assert mean_empty.empty
-#     assert cov_empty.empty
-#     print("Обработка пустого DataFrame доходностей: OK")
 
 def  calculate_portfolio_return(daily_returns_df: pd.DataFrame, weights: np.ndarray) -> float:
     """
@@ -421,40 +297,6 @@ def get_portfolio_performance(daily_returns_df: pd.DataFrame, weights: np.ndarra
         logging.error(f"Ошибка в get_portfolio_performance для весов {weights}: {e}")
         return np.nan, np.nan, np.nan
 
-# if __name__ == '__main__':
-#     logging.info("Пример расчета для портфеля...")
-#     # logging.basicConfig(level=logging.DEBUG) # Настройка уровня логов уже есть в начале файла
-
-#     np.random.seed(42)
-#     data_main = np.random.randn(TRADING_PERIODS_PER_YEAR * 2, 2) * 0.01 # Изменил имя переменной data
-#     dates_main = pd.date_range(start='2022-01-01', periods=TRADING_PERIODS_PER_YEAR * 2, freq='B') # Изменил имя переменной dates
-#     daily_returns_main = pd.DataFrame(data_main, columns=['Актив_A', 'Актив_B'], index=dates_main) # Изменил имя переменной daily_returns
-#     daily_returns_main.iloc[0] = 0.0
-
-#     portfolio_weights_main = np.array([0.6, 0.4]) # Изменил имя переменной
-#     risk_free_main = 0.02 # Изменил имя переменной
-
-#     try:
-#         # ИСПОЛЬЗУЕМ ПЕРЕИМЕНОВАННУЮ ФУНКЦИЮ
-#         # port_return, port_volatility, port_sharpe = get_portfolio_performance(daily_returns_main, portfolio_weights_main, risk_free_main)
-
-#         # ИЛИ можно вызвать напрямую для проверки, если get_portfolio_performance еще не отлажена
-#         ann_return_main = calculate_portfolio_return(daily_returns_main, portfolio_weights_main)
-#         ann_volatility_main = calculate_annualized_volatility(daily_returns_main, portfolio_weights_main)
-#         sharpe_main = calculate_sharpe_ratio(ann_return_main, ann_volatility_main, risk_free_main)
-
-
-#         if not (np.isnan(ann_return_main) or np.isnan(ann_volatility_main)):
-#             print(f"\n--- Результаты портфеля (Веса: {portfolio_weights_main}) ---")
-#             print(f"Годовая ожидаемая доходность: {ann_return_main:.2%}")
-#             print(f"Годовая волатильность: {ann_volatility_main:.2%}")
-#             print(f"Коэффициент Шарпа: {sharpe_main:.2f}")
-
-#         # ... (остальной код из __main__ для второго набора весов, если нужно) ...
-
-#     except Exception as e:
-#         print(f"Произошла ошибка в примере: {e}")
-
 def portfolio_return(weights, expected_returns):
     """
     Рассчитывает ожидаемую доходность портфеля.
@@ -524,7 +366,6 @@ def calculate_efficient_frontier(expected_returns, cov_matrix, num_points=100):
 
     return np.array(results_returns), np.array(results_volatility), np.array(results_weights)
 
-
 def minimum_variance_portfolio(expected_returns, cov_matrix):
     num_assets = len(expected_returns)
     # args убираем
@@ -579,57 +420,6 @@ def max_sharpe_ratio_portfolio(expected_returns, cov_matrix, risk_free_rate):
         return msr_weights, msr_return, msr_volatility, msr_sharpe
     else:
         return None, None, None, None
-
-# if __name__ == '__main__':
-#     # Примерные данные (замени на свои реальные данные)
-#     # Предположим, у нас 3 актива
-#     # Ожидаемые годовые доходности
-#     sample_returns = np.array([0.10, 0.15, 0.08])
-#     # Примерная годовая ковариационная матрица
-#     sample_cov_matrix = np.array([
-#         [0.0100, 0.0018, 0.0011],  # Актив1: var=0.01, cov(1,2)=0.0018, cov(1,3)=0.0011
-#         [0.0018, 0.0225, 0.0063],  # Актив2: cov(2,1)=0.0018, var=0.0225, cov(2,3)=0.0063
-#         [0.0011, 0.0063, 0.0081]   # Актив3: cov(3,1)=0.0011, cov(3,2)=0.0063, var=0.0081
-#     ])
-#     risk_free_rate_sample = 0.02 # Примерная безрисковая ставка
-
-#     print("--- Тестирование функций ---")
-
-#     # Тест точки на границе эффективности
-#     target_test_return = 0.12
-#     print(f"\nОптимальные веса для целевой доходности {target_test_return*100:.2f}%:")
-#     weights_for_target = minimize_volatility_for_target_return(sample_returns, sample_cov_matrix, target_test_return)
-#     if weights_for_target is not None:
-#         print(f"Веса: {[f'{w*100:.2f}%' for w in weights_for_target]}")
-#         print(f"Доходность портфеля: {portfolio_return(weights_for_target, sample_returns)*100:.2f}%")
-#         print(f"Волатильность портфеля: {portfolio_volatility(weights_for_target, sample_cov_matrix)*100:.2f}%")
-
-#     # Тест MVP
-#     print("\nПортфель Минимальной Дисперсии (MVP):")
-#     mvp_w, mvp_r, mvp_v = minimum_variance_portfolio(sample_returns, sample_cov_matrix)
-#     if mvp_w is not None:
-#         print(f"Веса MVP: {[f'{w*100:.2f}%' for w in mvp_w]}")
-#         print(f"Доходность MVP: {mvp_r*100:.2f}%")
-#         print(f"Волатильность MVP: {mvp_v*100:.2f}%")
-
-#     # Тест Max Sharpe Ratio
-#     print("\nПортфель с Максимальным Коэффициентом Шарпа:")
-#     msr_w, msr_r, msr_v, msr_s = max_sharpe_ratio_portfolio(sample_returns, sample_cov_matrix, risk_free_rate_sample)
-#     if msr_w is not None:
-#         print(f"Веса MSR: {[f'{w*100:.2f}%' for w in msr_w]}")
-#         print(f"Доходность MSR: {msr_r*100:.2f}%")
-#         print(f"Волатильность MSR: {msr_v*100:.2f}%")
-#         print(f"Коэффициент Шарпа MSR: {msr_s:.4f}")
-
-#     # Тест Границы Эффективности
-#     print("\nГенерация точек для Границы Эффективности (первые 5):")
-#     ef_returns, ef_volatilities, ef_weights = calculate_efficient_frontier(sample_returns, sample_cov_matrix, num_points=20)
-#     if len(ef_returns) > 0:
-#         for i in range(min(5, len(ef_returns))):
-#             print(f"Точка {i+1}: Доходность={ef_returns[i]*100:.2f}%, Волатильность={ef_volatilities[i]*100:.2f}%, "
-#                   f"Веса={[f'{w*100:.1f}%' for w in ef_weights[i]]}")
-#     else:
-#         print("Не удалось сгенерировать точки для границы эффективности.")
 
 def calculate_portfolio_optimization_results(prices_df: pd.DataFrame,
                                              risk_free_rate: float = 0.02, # Ставка по умолчанию 2%
@@ -719,4 +509,3 @@ def calculate_portfolio_optimization_results(prices_df: pd.DataFrame,
         # import traceback # Можно и так, если нет logging
         # traceback.print_exc()
         return None
-

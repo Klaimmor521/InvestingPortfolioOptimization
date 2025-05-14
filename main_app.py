@@ -1,14 +1,18 @@
 import customtkinter as ctk
-import portfolio_calculator 
-import pandas as pd 
+import data_fetcher
+import statistics_calculator
+import optimization_engine
+import pandas as pd
 from typing import Optional, List, Dict
 import numpy as np
 from datetime import datetime, date, timedelta
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import gc
+import file_operations
 
-# Импортируем функцию настройки UI
-import ui_setup 
+import ui_setup
 
 # Импорты для графика
 import matplotlib.pyplot as plt
@@ -21,7 +25,7 @@ ctk.set_default_color_theme("green")
 
 # --- Основное приложение ---
 app = ctk.CTk()
-app.title("Оптимизатор Портфеля v0.2")
+app.title("Оптимизатор Портфеля v0.3")
 app.geometry("1000x750")
 
 # --- Глобальные переменные для холста и панели инструментов графика ---
@@ -31,7 +35,6 @@ plot_no_data_label_widget = None
 current_fig = None
 
 # --- Создаем виджеты с помощью функции из ui_setup ---
-# Функция setup_main_window возвращает словарь с виджетами
 widgets = ui_setup.setup_main_window(app) 
 
 # --- Функция-обработчик нажатия кнопки ---
@@ -55,11 +58,14 @@ def calculate_button_callback():
     if not tickers_list:
         widgets['status_label'].configure(text="Ошибка: Введите корректные тикеры.", text_color="red")
         return
+    if len(tickers_list) < 2 : # Добавил проверку на мин. 2 тикера для диверсификации
+        widgets['status_label'].configure(text="Ошибка: Введите минимум 2 тикера для диверсификации.", text_color="red")
+        return
     if len(tickers_list) > 10:
         widgets['status_label'].configure(text="Ошибка: Введите не более 10 тикеров.", text_color="red")
         return
 
-    # --- Шаг 2: Получение и валидация дат ---
+     # --- Шаг 2: Получение и валидация дат ---
     start_date_str_input = widgets['start_date_entry'].get()
     end_date_str_input = widgets['end_date_entry'].get()
     try:
@@ -85,7 +91,7 @@ def calculate_button_callback():
     if start_date_obj >= final_end_date_obj:
         widgets['status_label'].configure(text="Ошибка: Начальная дата должна быть раньше конечной (учитывая коррекцию).", text_color="red")
         return
-    min_calendar_days_for_period = 42
+    min_calendar_days_for_period = 42 # ~ полтора месяца
     if (final_end_date_obj - start_date_obj).days < min_calendar_days_for_period:
         widgets['status_label'].configure(text=f"Ошибка: Период должен быть не менее {min_calendar_days_for_period} календарных дней.", text_color="red")
         return
@@ -102,24 +108,27 @@ def calculate_button_callback():
     risk_free_rate_str = widgets['risk_free_rate_entry'].get()
     try:
         risk_free_rate_percent = float(risk_free_rate_str)
-        if risk_free_rate_percent < 0:
-            widgets['status_label'].configure(text="Ошибка: Безрисковая ставка не может быть отрицательной.", text_color="red")
-            return
-        MAX_PROC = 50.0
-        if risk_free_rate_percent > MAX_PROC:
-            widgets['status_label'].configure(text=f"Ошибка: Безрисковая ставка слишком высока (макс. {MAX_PROC}%).", text_color="red")
+        if not (0 <= risk_free_rate_percent <= 50):
+            widgets['status_label'].configure(text="Ошибка: Безрисковая ставка должна быть от 0% до 50%.", text_color="red")
             return
         risk_free_rate = risk_free_rate_percent / 100.0
     except ValueError:
         widgets['status_label'].configure(text="Ошибка: Неверный формат безрисковой ставки. Введите число (%).", text_color="red")
         return
 
-    # --- Шаг 3: Загрузка данных ---
+    current_input_parameters = { # Локальная переменная для текущего вызова
+        "tickers": tickers_list[:],
+        "start_date": start_date_for_yfinance,
+        "end_date": end_date_for_yfinance,
+        "risk_free_rate": risk_free_rate
+    }
+
+    # --- Шаг 3: Загрузка данных (вызов из data_fetcher) ---
     status_before_load = corrected_date_message_part + f"Загрузка данных для: {tickers_list} ({start_date_for_yfinance} по {end_date_for_yfinance})..."
     widgets['status_label'].configure(text=status_before_load, text_color="gray")
     app.update_idletasks()
 
-    historical_data_df = portfolio_calculator.load_historical_data(
+    historical_data_df = data_fetcher.load_historical_data( # ИЗМЕНЕНО
         tickers=tickers_list,
         start_date=start_date_for_yfinance,
         end_date=end_date_for_yfinance
@@ -129,50 +138,55 @@ def calculate_button_callback():
     current_status_text = corrected_date_message_part # Начинаем с сообщения о коррекции даты, если оно было
     current_status_color = "gray" # По умолчанию
     can_proceed_to_optimization = True
+    failed_to_load_tickers = [] # Инициализируем
+    loaded_tickers = [] # Инициализируем
 
-    min_data_points_required = 20 # Минимальное количество дней с данными
+    min_data_points_required = 20 # Минимальное количество дней с данными (строк доходностей)
 
     if historical_data_df is None or not isinstance(historical_data_df, pd.DataFrame) or historical_data_df.empty:
         current_status_text = "Ошибка: Не удалось загрузить данные ни для одного из тикеров. Проверьте тикеры и интернет-соединение."
         current_status_color = "red"
         can_proceed_to_optimization = False
-    elif historical_data_df.shape[0] < min_data_points_required:
-        current_status_text = f"Ошибка: Загружено слишком мало данных ({historical_data_df.shape[0]} дн.). Требуется минимум {min_data_points_required} дн."
-        current_status_color = "red"
-        can_proceed_to_optimization = False
     else:
-        loaded_tickers = historical_data_df.columns.tolist()
-        all_input_tickers_set = set(tickers_list)
-        loaded_tickers_set = set(loaded_tickers)
-        failed_to_load_tickers = list(all_input_tickers_set - loaded_tickers_set)
-
-        if failed_to_load_tickers:
-            current_status_text += f"Предупреждение: Не удалось загрузить: {failed_to_load_tickers}. "
-            current_status_color = "orange"
-        
-        if not loaded_tickers: # Этот случай уже отловлен выше, но для полной уверенности
-            current_status_text += "Ошибка: Нет данных для расчета после фильтрации."
+        # Расчет доходностей для определения количества точек
+        # Временно вызываем здесь, чтобы проверить min_data_points_required
+        # В идеале, это должно быть частью data_processor или statistics_calculator
+        temp_returns_df = statistics_calculator.calculate_periodic_returns(historical_data_df) # ИЗМЕНЕНО
+        if temp_returns_df.shape[0] < min_data_points_required:
+            current_status_text = f"Ошибка: Загружено слишком мало данных для анализа ({temp_returns_df.shape[0]} периодов доходностей). Требуется минимум {min_data_points_required}."
             current_status_color = "red"
             can_proceed_to_optimization = False
-        elif len(loaded_tickers) == 1:
-            current_status_text += f"Расчет для одного актива: {loaded_tickers[0]}. Для диверсификации необходимо >1 актива. "
-            current_status_color = "orange" # Даже если не было failed_to_load, это предупреждение
-        elif len(loaded_tickers) > 1:
-            if failed_to_load_tickers:
-                current_status_text += f"Расчет для успешно загруженных: {loaded_tickers}. "
-            else: # Все запрошенные и загруженные тикеры совпали
-                current_status_text = corrected_date_message_part + f"Данные для {loaded_tickers} успешно загружены ({historical_data_df.shape[0]} строк). "
-                current_status_color = "gray" # Или "green"
+        else:
+            loaded_tickers = historical_data_df.columns.tolist()
+            all_input_tickers_set = set(tickers_list)
+            loaded_tickers_set = set(loaded_tickers)
+            failed_to_load_tickers = list(all_input_tickers_set - loaded_tickers_set)
 
-    # Устанавливаем финальный статус ПЕРЕД оптимизацией (или ошибку, если ее нельзя проводить)
+            if failed_to_load_tickers:
+                current_status_text += f"Предупреждение: Не удалось загрузить: {failed_to_load_tickers}. "
+                current_status_color = "orange"
+            
+            if not loaded_tickers:
+                current_status_text += "Ошибка: Нет данных для расчета после фильтрации."
+                current_status_color = "red"
+                can_proceed_to_optimization = False
+            elif len(loaded_tickers) < 2: # Изменил на < 2, так как для 1 тикера оптимизация не имеет смысла
+                current_status_text += f"Расчет для одного актива: {loaded_tickers[0]}. Для диверсификации необходимо >1 актива. "
+                current_status_color = "orange"
+                # can_proceed_to_optimization = False # Можно решить, запрещать ли оптимизацию для 1 актива
+            elif len(loaded_tickers) >= 2 :
+                if failed_to_load_tickers:
+                    current_status_text += f"Расчет для успешно загруженных: {loaded_tickers}. "
+                else:
+                    current_status_text = corrected_date_message_part + f"Данные для {loaded_tickers} успешно загружены ({historical_data_df.shape[0]} цен, {temp_returns_df.shape[0]} доходностей). "
+                    current_status_color = "gray" # Или "green"
+
     widgets['status_label'].configure(text=current_status_text.strip(), text_color=current_status_color)
     app.update_idletasks()
 
     if not can_proceed_to_optimization:
-        return # Выход, если оптимизацию проводить нельзя
+        return
 
-    # --- Шаг 4.1: Добавляем "Выполняется оптимизация" к текущему статусу ---
-    # (только если нет критической ошибки красного цвета)
     if widgets['status_label'].cget("text_color") != "red":
         existing_status_text = widgets['status_label'].cget("text")
         widgets['status_label'].configure(
@@ -181,8 +195,9 @@ def calculate_button_callback():
         )
         app.update_idletasks()
 
-    # --- Шаг 5: Вызов функции-координатора оптимизации ---
-    optimization_results = portfolio_calculator.calculate_portfolio_optimization_results(
+    # --- Шаг 5: Вызов функции-координатора оптимизации (из optimization_engine) ---
+    # Передаем prices_df, а не returns_df, так как calculate_portfolio_optimization_results ожидает цены
+    optimization_results = optimization_engine.calculate_portfolio_optimization_results(
         prices_df=historical_data_df,
         risk_free_rate=risk_free_rate
     )
@@ -190,15 +205,14 @@ def calculate_button_callback():
     # --- Шаг 6: Обработка результатов оптимизации ---
     if optimization_results:
         final_status_message_parts = []
-        final_status_color_after_opt = "green"
+        final_status_color_after_opt = "green" # По умолчанию
 
-        # Если были предупреждения на этапе загрузки, добавим их к финальному сообщению
         if corrected_date_message_part:
              final_status_message_parts.append(corrected_date_message_part.strip())
-        if failed_to_load_tickers:
-            final_status_message_parts.append(f"Обработаны не все тикеры (не загружены: {failed_to_load_tickers}).")
+        if failed_to_load_tickers: # Используем обновленный список
+            final_status_message_parts.append(f"Не все тикеры обработаны (не загружены: {failed_to_load_tickers}).")
             final_status_color_after_opt = "orange"
-        if len(loaded_tickers) == 1:
+        if loaded_tickers and len(loaded_tickers) < 2: # Используем обновленный список
             final_status_message_parts.append(f"Расчет для одного актива ({loaded_tickers[0]}).")
             final_status_color_after_opt = "orange"
         
@@ -212,6 +226,24 @@ def calculate_button_callback():
                      optimization_results.get('mvp'),
                      optimization_results.get('msr'),
                      optimization_results.get('stats'))
+
+        widgets['status_label'].configure(text=widgets['status_label'].cget("text") + " Сохранение...", text_color=widgets['status_label'].cget("text_color"))
+        app.update_idletasks()
+
+        save_successful = file_operations.auto_save_results_to_json(
+            optimization_results=optimization_results,
+            tickers_input=current_input_parameters.get("tickers", []),
+            start_date_input=current_input_parameters.get("start_date", ""),
+            end_date_input=current_input_parameters.get("end_date", ""),
+            risk_free_rate_input=current_input_parameters.get("risk_free_rate", 0.02)
+        )
+        if save_successful:
+            # Можно добавить к статусу или просто оставить лог из file_operations
+            current_final_status = widgets['status_label'].cget("text").replace(" Сохранение...", "")
+            widgets['status_label'].configure(text=current_final_status + " Результаты сохранены.", text_color=widgets['status_label'].cget("text_color"))
+        else:
+            current_final_status = widgets['status_label'].cget("text").replace(" Сохранение...", "")
+            widgets['status_label'].configure(text=current_final_status + " Ошибка сохранения результатов.", text_color="orange") # Или red, если критично
         
         print("\n--- Результаты Оптимизации (из callback) ---") # Для консольной отладки
         if optimization_results.get('mvp'): print("MVP:", optimization_results['mvp'])
@@ -275,7 +307,7 @@ def display_text_results(mvp_results: Optional[Dict], msr_results: Optional[Dict
         if asset_names and mvp_results.get('weights') is not None and len(asset_names) == len(mvp_results['weights']):
             textbox.insert("end", "  Состав портфеля:\n", "metric_label")
             for ticker, weight in zip(asset_names, mvp_results['weights']):
-                if weight > 1e-4:
+                if weight > 1e-5: # Уменьшил порог, чтобы видеть больше активов
                     textbox.insert("end", "    - ", "metric_label")
                     textbox.insert("end", f"{ticker}", "asset_name")
                     textbox.insert("end", ": ", "metric_label")
@@ -284,7 +316,7 @@ def display_text_results(mvp_results: Optional[Dict], msr_results: Optional[Dict
              textbox.insert("end", "  (Веса не сопоставлены с именами активов)\n", "info_text")
         textbox.insert("end", "\n")
     else:
-        textbox.insert("end", "Портфель Минимальной Дисперсии (MVP): Не удалось рассчитать.\n\n", "info_text") # h2 убрал, это инфо
+        textbox.insert("end", "Портфель Минимальной Дисперсии (MVP): Не удалось рассчитать.\n\n", "info_text")
 
     if msr_results:
         textbox.insert("end", "Портфель Макс. Коэфф. Шарпа (MSR):\n", "h2")
@@ -298,7 +330,7 @@ def display_text_results(mvp_results: Optional[Dict], msr_results: Optional[Dict
         if asset_names and msr_results.get('weights') is not None and len(asset_names) == len(msr_results['weights']):
             textbox.insert("end", "  Состав портфеля:\n", "metric_label")
             for ticker, weight in zip(asset_names, msr_results['weights']):
-                if weight > 1e-4:
+                if weight > 1e-5: # Уменьшил порог
                     textbox.insert("end", "    - ", "metric_label")
                     textbox.insert("end", f"{ticker}", "asset_name")
                     textbox.insert("end", ": ", "metric_label")
@@ -306,31 +338,27 @@ def display_text_results(mvp_results: Optional[Dict], msr_results: Optional[Dict
         elif msr_results.get('weights') is not None:
              textbox.insert("end", "  (Веса не сопоставлены с именами активов)\n", "info_text")
     else:
-        textbox.insert("end", "Портфель Макс. Коэфф. Шарпа (MSR): Не удалось рассчитать.\n", "info_text") # h2 убрал
+        textbox.insert("end", "Портфель Макс. Коэфф. Шарпа (MSR): Не удалось рассчитать.\n", "info_text")
 
     textbox.configure(state="disabled")
-    print("Текстовые результаты (с форматированием цветом/подчеркиванием) выведены в CTkTextbox.")
 
 def clear_plot():
     global canvas_widget, toolbar_widget, plot_no_data_label_widget, current_fig
     if canvas_widget:
-        canvas_widget.get_tk_widget().destroy()
+        canvas_widget.get_tk_widget().destroy() # Уничтожаем старый виджет холста
         canvas_widget = None
     if toolbar_widget:
-        toolbar_widget.destroy()
+        toolbar_widget.destroy() # Уничтожаем старый виджет панели инструментов
         toolbar_widget = None
-    if plot_no_data_label_widget and plot_no_data_label_widget.winfo_exists():
+    if plot_no_data_label_widget and plot_no_data_label_widget.winfo_exists(): # Проверяем, существует ли метка
         plot_no_data_label_widget.destroy()
         plot_no_data_label_widget = None
     
-    # --- НОВОЕ: Явно закрываем предыдущую фигуру Matplotlib ---
     if current_fig:
-        plt.close(current_fig) # Закрываем фигуру
-        current_fig = None
-    # --- КОНЕЦ НОВОГО ---
-    print("Область графика и фигура Matplotlib очищены.")
-    gc.collect()
-    print("Сборщик мусора вызван.")
+        plt.close(current_fig) # Закрываем фигуру Matplotlib
+        current_fig = None     # Сбрасываем ссылку на фигуру
+    # gc.collect() # Можно убрать отсюда, вызывать реже
+    print("Область графика и предыдущая фигура Matplotlib очищены.")
 
 def display_plot(frontier_data: Optional[Dict],
                  mvp_results: Optional[Dict],
@@ -342,71 +370,75 @@ def display_plot(frontier_data: Optional[Dict],
 
     # Проверяем, есть ли хоть какие-то данные для графика
     has_frontier = frontier_data and 'volatilities' in frontier_data and 'returns' in frontier_data and len(frontier_data['returns']) > 0
-    has_mvp = mvp_results and 'volatility' in mvp_results and 'return' in mvp_results
-    has_msr = msr_results and 'volatility' in msr_results and 'return' in msr_results
+    has_mvp = mvp_results and 'volatility' in mvp_results and 'return' in mvp_results and mvp_results.get('weights') is not None
+    has_msr = msr_results and 'volatility' in msr_results and 'return' in msr_results and msr_results.get('weights') is not None
     has_individual_assets = stats_data and 'mean_returns' in stats_data and 'cov_matrix' in stats_data and not stats_data['mean_returns'].empty
 
     if not (has_frontier or has_mvp or has_msr or has_individual_assets):
         print("Нет данных для построения графика.")
         plot_no_data_label_widget = ctk.CTkLabel(plot_frame, text="Нет данных для отображения графика.")
-        # Размещаем метку по центру plot_frame
         plot_no_data_label_widget.grid(row=0, column=0, sticky="nsew")
-        plot_frame.grid_rowconfigure(0, weight=1) # Чтобы метка была по центру вертикально
-        plot_frame.grid_columnconfigure(0, weight=1) # Чтобы метка была по центру горизонтально
+        # Настройка растягивания метки по центру, если нужно
+        plot_frame.grid_rowconfigure(0, weight=1)
+        plot_frame.grid_columnconfigure(0, weight=1)
         return
 
-    fig_face_color = '#2B2B2B'
-    current_fig = Figure(figsize=(7, 5), dpi=100, facecolor=fig_face_color) 
-    fig = Figure(figsize=(7, 5), dpi=100, facecolor=fig_face_color)
+    matplotlib_fig_face_color = '#2B2B2B'
+    
+    current_fig = Figure(figsize=(6, 4), dpi=100, facecolor=matplotlib_fig_face_color) # Сохраняем в глобальную переменную
     ax = current_fig.add_subplot(111)
 
-    ax.set_facecolor(fig_face_color)
+    ax.set_facecolor(matplotlib_fig_face_color)
     ax.tick_params(axis='x', colors='white')
     ax.tick_params(axis='y', colors='white')
     ax.spines['bottom'].set_color('white')
-    ax.spines['top'].set_color('white')
-    ax.spines['right'].set_color('white')
+    ax.spines['top'].set_color('white') # или fig_face_color для невидимости
+    ax.spines['right'].set_color('white') # или fig_face_color
     ax.spines['left'].set_color('white')
     ax.yaxis.label.set_color('white')
     ax.xaxis.label.set_color('white')
     ax.title.set_color('white')
 
     if has_frontier:
-        ax.plot(frontier_data['volatilities'], frontier_data['returns'], 'b-', label='Граница Эффективности', linewidth=2)
+        ax.plot(frontier_data['volatilities'], frontier_data['returns'], 'c-', label='Граница Эффективности', linewidth=2, alpha=0.8) # Cyan
     if has_mvp:
-        ax.scatter(mvp_results['volatility'], mvp_results['return'], marker='o', color='red', s=100, label='MVP (Мин. Риск)')
+        ax.scatter(mvp_results['volatility'], mvp_results['return'], marker='o', color='#FF6B6B', s=100, label='MVP', zorder=5, edgecolor='white') # Ярко-красный
     if has_msr:
-        ax.scatter(msr_results['volatility'], msr_results['return'], marker='*', color='green', s=150, label='MSR (Макс. Шарп)')
+        ax.scatter(msr_results['volatility'], msr_results['return'], marker='*', color='#4CAF50', s=150, label='MSR', zorder=5, edgecolor='white') # Зеленый
     if has_individual_assets:
         asset_returns = stats_data['mean_returns']
         asset_cov_matrix = stats_data['cov_matrix']
+        colors = plt.cm.get_cmap('viridis', len(asset_returns)) # Цветовая схема для активов
         for i, ticker in enumerate(asset_returns.index):
             asset_volatility = np.sqrt(asset_cov_matrix.iloc[i, i])
-            ax.scatter(asset_volatility, asset_returns.iloc[i], marker='x', s=80, label=ticker)
+            ax.scatter(asset_volatility, asset_returns.iloc[i], marker='x', s=80, label=ticker, color=colors(i), zorder=4)
 
-    ax.set_title('Граница Эффективности Портфеля', color='white')
-    ax.set_xlabel('Волатильность (Риск)', color='white')
-    ax.set_ylabel('Ожидаемая Доходность', color='white')
-    if has_frontier or has_mvp or has_msr or has_individual_assets: # Отображаем легенду, только если есть что отображать
-        ax.legend(facecolor='#404040', edgecolor='white', labelcolor='white', loc='best')
-    ax.grid(True, linestyle='--', alpha=0.5, color='#808080') # Используем HEX для цвета сетки
+    ax.set_title('Граница Эффективности Портфеля')
+    ax.set_xlabel('Волатильность (Годовое Станд. Отклонение)')
+    ax.set_ylabel('Ожидаемая Доходность (Годовая)')
+    if ax.has_data(): # Проверяем, есть ли что-то на графике для легенды
+         ax.legend(facecolor='#333333', edgecolor='gray', labelcolor='white', loc='best', fontsize='small')
+    ax.grid(True, linestyle=':', alpha=0.4, color='gray')
 
-    fig.tight_layout()
+    current_fig.tight_layout(pad=0.5) # Добавил отступ
 
     canvas = FigureCanvasTkAgg(current_fig, master=plot_frame)
-    canvas_widget = canvas
+    canvas_widget = canvas # Сохраняем ссылку
     canvas.draw()
     canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
+
+    # Настраиваем растягивание холста
     plot_frame.grid_rowconfigure(0, weight=1)
     plot_frame.grid_columnconfigure(0, weight=1)
 
+    # Панель инструментов (можно сделать ее более компактной или скрыть, если не нужна)
     toolbar = NavigationToolbar2Tk(canvas, plot_frame, pack_toolbar=False)
-    toolbar_widget = toolbar
+    toolbar_widget = toolbar # Сохраняем ссылку
     toolbar.update()
-    toolbar.grid(row=1, column=0, sticky="ew")
-    # plot_frame.grid_rowconfigure(1, weight=0) # Это можно убрать, если toolbar нормально размещается
+    toolbar.grid(row=1, column=0, sticky="ew", padx=2, pady=2)
+    # plot_frame.grid_rowconfigure(1, weight=0) # Для панели инструментов вес 0
 
-    print("График отображен в GUI (новый макет).")
+    print("График отображен в GUI.")
 
 # --- Привязываем команду к кнопке ПОСЛЕ ее создания ---
 widgets['calculate_button'].configure(command=calculate_button_callback)

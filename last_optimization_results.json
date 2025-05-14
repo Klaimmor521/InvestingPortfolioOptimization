@@ -1,0 +1,30 @@
+{
+    "request_parameters": {
+        "end_date": "2025-05-05",
+        "risk_free_rate_percent": 2.0,
+        "start_date": "2021-01-01",
+        "tickers": [
+            "GOOG",
+            "AAPL"
+        ]
+    },
+    "results": {
+        "msr": {
+            "return_annual_percent": 18.67,
+            "sharpe_ratio": 0.597,
+            "volatility_annual_percent": 27.93,
+            "weights": {
+                "AAPL": 0.2986,
+                "GOOG": 0.7014
+            }
+        },
+        "mvp": {
+            "return_annual_percent": 17.18,
+            "volatility_annual_percent": 26.65,
+            "weights": {
+                "AAPL": 0.6117,
+                "GOOG": 0.3883
+            }
+        }
+    }
+}
