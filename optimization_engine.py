@@ -30,7 +30,7 @@ def minimize_volatility_for_target_return(expected_returns: pd.Series,
     """Находит портфель с минимальной волатильностью для заданной целевой доходности."""
     num_assets = len(expected_returns)
     
-    def objective_vol(weights_arg): # Убрал cov_matrix_arg, он доступен из замыкания
+    def objective_vol(weights_arg):
         return portfolio_volatility(weights_arg, cov_matrix)
 
     constraints = (

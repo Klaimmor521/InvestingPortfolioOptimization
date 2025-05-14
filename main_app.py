@@ -231,12 +231,12 @@ def calculate_button_callback():
         app.update_idletasks()
 
         save_successful = file_operations.auto_save_results_to_json(
-            optimization_results=optimization_results,
-            tickers_input=current_input_parameters.get("tickers", []),
-            start_date_input=current_input_parameters.get("start_date", ""),
-            end_date_input=current_input_parameters.get("end_date", ""),
-            risk_free_rate_input=current_input_parameters.get("risk_free_rate", 0.02)
-        )
+        optimization_results=optimization_results,
+        processed_tickers=loaded_tickers, # ПЕРЕДАЕМ СПИСОК ФАКТИЧЕСКИ ЗАГРУЖЕННЫХ ТИКЕРОВ
+        start_date_input=start_date_for_yfinance, # Исходные даты запроса
+        end_date_input=end_date_for_yfinance,     # Исходные даты запроса
+        risk_free_rate_input=risk_free_rate       # Использованная ставка
+    )
         if save_successful:
             # Можно добавить к статусу или просто оставить лог из file_operations
             current_final_status = widgets['status_label'].cget("text").replace(" Сохранение...", "")

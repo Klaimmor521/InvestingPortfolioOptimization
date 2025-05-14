@@ -4,9 +4,6 @@ import numpy as np
 from typing import Tuple # Добавляем Tuple
 import logging
 
-# Настройка логирования
-# logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
 TRADING_PERIODS_PER_YEAR = 252
 
 def calculate_periodic_returns(prices_df: pd.DataFrame) -> pd.DataFrame:
