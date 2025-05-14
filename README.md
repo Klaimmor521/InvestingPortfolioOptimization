@@ -83,5 +83,7 @@ The results provided by the app will help you understand how funds could be dist
 
 # Important when using the results:
 **This is not a prediction**: The results are based on the past. The future may be different.
+
 **This is not an investment recommendation**: The app is an educational tool. Real investment decisions should be made taking into account many other factors (your financial goals, the investment period, the current market situation, fundamental analysis of companies, etc.) and, possibly, with the advice of a financial adviser.
+
 **Periodic rebalancing**: If you decide to follow any of the proposed portfolios, keep in mind that asset weights will change over time due to different price dynamics. Optimal portfolios require periodic rebalancing (returning the weights to the target ones).
