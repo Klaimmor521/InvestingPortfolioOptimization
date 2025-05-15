@@ -4,7 +4,7 @@ import logging
 import os # Для работы с путями
 
 # Имя файла для автоматического сохранения
-DEFAULT_RESULTS_FILENAME = "last_optimization_results.json"
+DEFAULT_RESULTS_FILENAME = "calculation_history.json"
 
 def auto_save_results_to_json(
         optimization_results: Optional[Dict],
@@ -89,4 +89,19 @@ def auto_save_results_to_json(
         return True
     except Exception as e:
         logging.error(f"Ошибка при автоматическом сохранении результатов в JSON ({filename}): {e}", exc_info=True)
+        return False
+
+def clear_calculation_history(filename: str = DEFAULT_RESULTS_FILENAME) -> bool:
+    """
+    Очищает файл истории расчетов (удаляет его или записывает пустой список).
+    """
+    try:
+        if os.path.exists(filename):
+            os.remove(filename) # Удаляем файл, если он существует
+            logging.info(f"Файл истории {filename} успешно удален (очищен).")
+        else:
+            logging.info(f"Файл истории {filename} не найден, очистка не требуется.")
+        return True
+    except Exception as e:
+        logging.error(f"Ошибка при очистке файла истории {filename}: {e}", exc_info=True)
         return False

@@ -46,6 +46,19 @@ def re_enable_calculate_button():
     else:
         print("Попытка восстановить кнопку, но is_calculating все еще True (не должно быть)")
 
+def clear_history_button_callback():
+    widgets['status_label'].configure(text="Очистка истории...", text_color="gray")
+    app.update_idletasks()
+
+    # confirm = messagebox.askyesno("Подтверждение", "Вы уверены, что хотите очистить всю историю расчетов?")
+    # if not confirm:
+    #     widgets['status_label'].configure(text="Очистка истории отменена.", text_color="gray")
+    #     return
+
+    if file_operations.clear_calculation_history():
+        widgets['status_label'].configure(text="История расчетов успешно очищена.", text_color="green")
+    else:
+        widgets['status_label'].configure(text="Ошибка при очистке истории расчетов.", text_color="red")
 
 # --- Создаем виджеты с помощью функции из ui_setup ---
 widgets = ui_setup.setup_main_window(app) 
@@ -485,6 +498,7 @@ def display_plot(frontier_data: Optional[Dict],
 
 # --- Привязываем команду к кнопке ПОСЛЕ ее создания ---
 widgets['calculate_button'].configure(command=calculate_button_callback)
+widgets['clear_history_button'].configure(command=clear_history_button_callback)
 
 # --- Запуск главного цикла приложения ---
 app.mainloop()
