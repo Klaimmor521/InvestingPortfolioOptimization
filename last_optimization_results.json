@@ -1,30 +1,38 @@
 {
     "request_parameters": {
-        "end_date": "2023-05-05",
+        "end_date": "2025-05-05",
         "risk_free_rate_percent": 2.0,
         "start_date": "2020-05-05",
         "tickers": [
-            "A",
+            "AAPL",
             "F",
+            "GOOG",
+            "MSFT",
             "T"
         ]
     },
     "results": {
         "msr": {
-            "return_annual_percent": 31.71,
-            "sharpe_ratio": 1.0149,
-            "volatility_annual_percent": 29.27,
+            "return_annual_percent": 21.55,
+            "sharpe_ratio": 0.9759,
+            "volatility_annual_percent": 20.03,
             "weights": {
-                "A": 0.54,
-                "F": 0.46
+                "AAPL": 0.2498,
+                "F": 0.1404,
+                "GOOG": 0.0825,
+                "MSFT": 0.2329,
+                "T": 0.2945
             }
         },
         "mvp": {
-            "return_annual_percent": 10.55,
-            "volatility_annual_percent": 20.06,
+            "return_annual_percent": 18.35,
+            "volatility_annual_percent": 18.32,
             "weights": {
-                "A": 0.4163,
-                "T": 0.5837
+                "AAPL": 0.0737,
+                "F": 0.0122,
+                "GOOG": 0.0742,
+                "MSFT": 0.3062,
+                "T": 0.5336
             }
         }
     }
