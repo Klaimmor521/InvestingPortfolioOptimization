@@ -87,7 +87,7 @@ def calculate_button_callback():
     widgets['result_display_textbox'].delete("1.0", "end")
     widgets['result_display_textbox'].configure(state="disabled")
     clear_plot() # Очищаем график
-    # app.update_idletasks() # Обновляем интерфейс
+    app.update_idletasks() # Обновляем интерфейс
     try:
         # --- Шаг 1: Получение и валидация тикеров ---
         tickers_string = widgets['ticker_entry'].get()
