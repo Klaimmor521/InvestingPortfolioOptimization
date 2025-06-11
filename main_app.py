@@ -159,6 +159,25 @@ def calculate_button_callback():
             "risk_free_rate": risk_free_rate
         }
 
+        # Получение и валидация количества точек для Границы Эффективности
+        frontier_points_str = widgets['frontier_points_entry'].get()
+        num_frontier_points_to_calc = 50 # Значение по умолчанию
+
+        if frontier_points_str: # Если поле не пустое
+            try:
+                num_frontier_points_input = int(frontier_points_str)
+                if 10 <= num_frontier_points_input <= 500: # Разумные пределы
+                    num_frontier_points_to_calc = num_frontier_points_input
+                else:
+                    widgets['status_label'].configure(text="Ошибка: Кол-во точек для Границы должно быть от 10 до 500. Используется значение по умолчанию (50).", text_color="orange")
+                    # Можно также сбросить значение в поле на дефолтное
+                    widgets['frontier_points_entry'].delete(0, "end")
+                    widgets['frontier_points_entry'].insert(0, str(num_frontier_points_to_calc))
+            except ValueError:
+                widgets['status_label'].configure(text="Ошибка: Неверный формат кол-ва точек. Используется значение по умолчанию (50).", text_color="orange")
+                widgets['frontier_points_entry'].delete(0, "end")
+                widgets['frontier_points_entry'].insert(0, str(num_frontier_points_to_calc))
+
         # --- Шаг 3: Загрузка данных (вызов из data_fetcher) ---
         status_before_load = corrected_date_message_part + f"Загрузка данных для: {tickers_list} ({start_date_for_yfinance} по {end_date_for_yfinance})..."
         widgets['status_label'].configure(text=status_before_load, text_color="gray")
@@ -243,7 +262,8 @@ def calculate_button_callback():
         # Передаем prices_df, а не returns_df, так как calculate_portfolio_optimization_results ожидает цены
         optimization_results = optimization_engine.calculate_portfolio_optimization_results(
             prices_df=historical_data_df,
-            risk_free_rate=risk_free_rate
+            risk_free_rate=risk_free_rate,
+            num_frontier_points=num_frontier_points_to_calc
         )
 
         # --- Шаг 6: Обработка результатов оптимизации ---

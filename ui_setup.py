@@ -36,6 +36,17 @@ def setup_main_window(app: ctk.CTk) -> Dict[str, ctk.CTkBaseClass]:
     widgets['risk_free_rate_entry'].pack(side=ctk.LEFT)
     widgets['risk_free_rate_entry'].insert(0, "2.0")
 
+    # --- НОВОЕ: Поле для ввода количества точек для Границы Эффективности ---
+    frontier_points_frame = ctk.CTkFrame(input_frame, fg_color="transparent")
+    frontier_points_frame.pack(pady=(5,0)) # Небольшой отступ сверху
+
+    frontier_points_label = ctk.CTkLabel(frontier_points_frame, text="Точек для Границы Эффективности:")
+    frontier_points_label.pack(side=ctk.LEFT, padx=(0, 5))
+    widgets['frontier_points_entry'] = ctk.CTkEntry(frontier_points_frame, placeholder_text="50", width=60)
+    widgets['frontier_points_entry'].pack(side=ctk.LEFT)
+    widgets['frontier_points_entry'].insert(0, "50") # Значение по умолчанию 50 точек
+    # --- КОНЕЦ НОВОГО ---
+
     # --- Кнопки управления ---
     # Фрейм-контейнер для кнопок, чтобы он мог быть отцентрирован
     buttons_container_frame = ctk.CTkFrame(app, fg_color="transparent")
