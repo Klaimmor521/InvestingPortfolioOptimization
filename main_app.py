@@ -50,10 +50,14 @@ def clear_history_button_callback():
     widgets['status_label'].configure(text="Очистка истории...", text_color="gray")
     app.update_idletasks()
 
-    # confirm = messagebox.askyesno("Подтверждение", "Вы уверены, что хотите очистить всю историю расчетов?")
-    # if not confirm:
-    #     widgets['status_label'].configure(text="Очистка истории отменена.", text_color="gray")
-    #     return
+    widgets["ticker_entry"].delete(0, "end")
+    widgets["start_date_entry"].delete(0, "end")
+    widgets["end_date_entry"].delete(0, "end")
+    widgets["risk_free_rate_entry"].delete(0, "end")
+    widgets['result_display_textbox'].configure(state="normal")
+    widgets['result_display_textbox'].delete("1.0", "end")
+    widgets['result_display_textbox'].configure(state="disabled")
+    clear_plot() # Очищаем график
 
     if file_operations.clear_calculation_history():
         widgets['status_label'].configure(text="История расчетов успешно очищена.", text_color="green")
@@ -61,7 +65,7 @@ def clear_history_button_callback():
         widgets['status_label'].configure(text="Ошибка при очистке истории расчетов.", text_color="red")
 
 # --- Создаем виджеты с помощью функции из ui_setup ---
-widgets = ui_setup.setup_main_window(app) 
+widgets = ui_setup.setup_main_window(app)
 
 # --- Функция-обработчик нажатия кнопки ---
 def calculate_button_callback():
