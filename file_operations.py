@@ -2,6 +2,8 @@ import json
 from typing import Dict, Optional, List
 import logging
 import os # Для работы с путями
+import sys
+import ctypes
 
 # Имя файла для автоматического сохранения
 DEFAULT_RESULTS_FILENAME = "calculation_history.json"
@@ -82,10 +84,21 @@ def auto_save_results_to_json(
         return False
 
     try:
-        file_path = filename
+        base_dir = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(sys.argv[0])))
+        file_path = os.path.join(base_dir, filename)
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(data_to_save, f, ensure_ascii=False, indent=4, sort_keys=True)
+
         logging.info(f"Результаты автоматически сохранены в: {os.path.abspath(file_path)}")
+
+        # ⬇️ Вот здесь всплывающее окно:
+        ctypes.windll.user32.MessageBoxW(
+            0,
+            f"Файл сохранён по пути:\n{os.path.abspath(file_path)}",
+            "Сохранение JSON",
+            0
+        )
+
         return True
     except Exception as e:
         logging.error(f"Ошибка при автоматическом сохранении результатов в JSON ({filename}): {e}", exc_info=True)

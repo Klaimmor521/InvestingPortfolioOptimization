@@ -1,3 +1,47 @@
-venv/
+# === Python ===
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.python-version
+
+# === Virtual environment ===
+venv/
+env/
+.venv/
+venv*/
+
+# === Build artifacts ===
+build/
+dist/
+*.egg-info/
+__pypackages__/
+
+# === Installer files ===
+installer/app_files/*       
+output/           
+PortfolioOptimizer.spec     
+
+# === IDE and editor files ===
+.idea/
+.vscode/
+*.code-workspace
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# === OS generated files ===
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# === Logs and temp files ===
+*.log
+*.tmp
+*.bak
