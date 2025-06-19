@@ -2,7 +2,7 @@
 ## Investing diversification for optimizing the portfolio
 
 ## Installation:
-### 1 Option: Manual instalation.
+### 1. Option: Manual instalation.
 1. Create folder for the project and run there in terminal `git clone MY_URL_REPOSITORY`
 2. In the project run `python -m venv venv`
 3. Activate virtual space in the terminal `venv\Scripts\Activate.ps1`. To deactivate virtual space use `deactivate`
