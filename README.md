@@ -9,7 +9,7 @@
 4. Install the dependencies `pip install -r requirements.txt`
 5. Run app in the terminal `python main_app.py`
 
-### 2. Option: Instalation from release.
+### 2. Option: Installation from release.
 1. Double-click on the `.exe` of the installer (for example: PortfolioOptimizerSetup.exe) and follow the steps of the installation wizard.
 2. The installer will automatically place the necessary files in the folder selected by the user and create a shortcut on the desktop.
 3. After installation, the application can be run:
