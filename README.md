@@ -27,6 +27,7 @@ Visually demonstrate **how to optimize a portfolio of selected stocks based on t
         - **Maximum Sharpe Ratio (MSR) Portfolio**: A portfolio offering the best return-to-risk ratio (taking into account the risk-free rate).
 5. **Visualization and Display**: The calculation results are presented to the user in graphical (Efficiency Boundary) and textual (composition and characteristics of MVP and MSR) form.
 6. **Automatic Saving**: The main query parameters and results for MVP and MSR are automatically saved to a local JSON file (last_optimization_results.json) for later analysis.
+7. **The path of JSON file**: Each time you click on the "Calculate Portfolio" button, a pop-up window is displayed with a notification about the path of your josn data file.
 
 ## III. Instructions for Using the Interface
 1. **The "Enter stock tickers separated by commas:" field**:
@@ -43,11 +44,16 @@ Visually demonstrate **how to optimize a portfolio of selected stocks based on t
 4. **The Risk-free field. rate (% per annum)"**:
     - Enter the annual risk-free percentage rate (for example, 2.0 for 2%). This value is used to calculate the Sharpe coefficient.
     - Usually, the yield on government bonds is used as a risk-free rate.
-5. **The "Calculate Portfolio" button**:
+5. **The Efficiency Limit field**:
+    - Enter a number in this field (for example, from 20 to 200).
+    - Get more control over the visualization process, it can build smoother (more dots) or faster (fewer dots) The Efficiency Limit.
+6. **The "Calculate Portfolio" button**:
     - After entering all the data, click this button to start the data loading and optimization process.
-6. **Status area (under the button)**:
+7. **The "Clear history" button**:
+    -  After plotting, your data (MVP, MSR, start date, end date, etc.) is automatically saved in the last_optimization_results.json JSON file. You can delete the history file and clear all data from the interface by clicking on the "Clear History" button. 
+8. **Status area (under the button)**:
     - Progress messages will be displayed here: loading data, starting optimization, error messages or warnings (for example, if not all tickers were loaded), and a message about successful completion and saving.
-7. **Graph Area (bottom left)**:
+9. **Graph Area (bottom left)**:
     - After successful calculation, the "Portfolio Performance Boundary" graph will appear here.
     - **Axes**: Horizontal – "Volatility (Annual Standard Deviation)" (a measure of risk), Vertical – "Expected Return (Annual)".
     - **Lines and dots**:
@@ -57,7 +63,7 @@ Visually demonstrate **how to optimize a portfolio of selected stocks based on t
         - **Multi-colored crosses**: The position of individual stocks (if you had invested 100% in one of them).
     - **Legend**: Explains the notation on the graph.
     - **Matplotlib toolbar (under the graph)**: Allows you to scale the graph, move it, save the graph image, etc.
-8. **The "Optimization Results" area (bottom right)**:
+10. **The "Optimization Results" area (bottom right)**:
     - Detailed specifications for:
         - **Minimum Variance Portfolio (MVP)**: Expected return, Volatility (Risk), Portfolio composition (which stocks and in what proportion (in %) are recommended to be included).
         - **Briefcase Max. Coefficient. Sharpe Ratio (MSR)**: Expected Return, Volatility (Risk), Sharpe Ratio, Portfolio Composition.
